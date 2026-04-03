@@ -6,24 +6,24 @@ create_agent  — instantiates all concrete blocks and wires them into an Orches
 main          — validates config, builds the agent, and starts the run loop.
 
 Environment variables:
-    XAI_API_KEY          (required) xAI API key for Grok
+    MODEL                (optional) pydantic-ai model string; default xai:grok-4-1-fast-reasoning
     LANGFUSE_ENABLED     (optional) "true" to enable observability; default off
     LANGFUSE_SECRET_KEY  (optional) Langfuse secret key
     LANGFUSE_PUBLIC_KEY  (optional) Langfuse public key
     LANGFUSE_HOST        (optional) Langfuse host; defaults to cloud
-    SYSTEM_MESSAGE       (optional) System prompt text
+    SYSTEM_MESSAGE       (optional) Override the default system prompt fallback
     MAX_TURNS            (optional) Conversation history window size; default 40
 """
 
 import os
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from langfuse import Langfuse
 
 from tbc_agent.conversation_state import ConversationState
 from tbc_agent.input_events import CliProducer, InputProducer
-from tbc_agent.llm_interface import GrokInterface, LlmInterface
+from tbc_agent.llm_interface import DEFAULT_MODEL, create_llm_agent
 from tbc_agent.observability import LangfuseObservability
 from tbc_agent.orchestrator import NoOpObservability, ObservabilityClient, Orchestrator
 from tbc_agent.output_channels import CliChannel, OutputChannel
@@ -36,7 +36,7 @@ DEFAULT_MAX_TURNS = 40
 class Config:
     """Validated agent configuration."""
 
-    xai_api_key: str
+    model: str = DEFAULT_MODEL
     langfuse_enabled: bool = False
     langfuse_secret_key: str | None = None
     langfuse_public_key: str | None = None
@@ -46,22 +46,11 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        """Build Config from environment variables.
-
-        Raises:
-            ValueError: If XAI_API_KEY is absent or empty.
-        """
-        api_key = os.environ.get("XAI_API_KEY", "").strip()
-        if not api_key:
-            raise ValueError(
-                "XAI_API_KEY environment variable is required but not set. "
-                "Export your xAI API key before starting the agent."
-            )
-
+        """Build Config from environment variables."""
         langfuse_enabled = os.environ.get("LANGFUSE_ENABLED", "").lower() == "true"
 
         return cls(
-            xai_api_key=api_key,
+            model=os.environ.get("MODEL", DEFAULT_MODEL),
             langfuse_enabled=langfuse_enabled,
             langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
             langfuse_public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
@@ -97,7 +86,6 @@ def create_agent(
     config: Config,
     *,
     producer_override: InputProducer | None = None,
-    llm_override: LlmInterface | None = None,
     channel_override: OutputChannel | None = None,
 ) -> Orchestrator:
     """Instantiate and wire all concrete blocks into an Orchestrator.
@@ -106,7 +94,6 @@ def create_agent(
     the agent's internal logic.
     """
     producer = producer_override or CliProducer()
-    llm = llm_override or GrokInterface(api_key=config.xai_api_key)
     channel = channel_override or CliChannel()
     state = ConversationState(max_turns=config.max_turns)
     observability = _create_observability(config)
@@ -114,25 +101,20 @@ def create_agent(
         prompts=DEFAULT_PROMPTS,
         default=config.default_system_prompt,
     )
+    agent = create_llm_agent(config.model, registry)
 
     return Orchestrator(
         producer=producer,
-        llm=llm,
+        agent=agent,
         channel=channel,
         state=state,
-        prompt_registry=registry,
         observability=observability,
     )
 
 
 def main() -> None:
     """Entrypoint: load config, build the agent, run the loop."""
-    try:
-        config = Config.from_env()
-    except ValueError as exc:
-        print(f"Configuration error: {exc}")
-        raise SystemExit(1)
-
+    config = Config.from_env()
     agent = create_agent(config)
     print("Chat agent ready. Type 'exit' or press Ctrl-D to quit.\n")
     agent.run()

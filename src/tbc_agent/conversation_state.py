@@ -1,59 +1,35 @@
 """
 Block 4: Conversation State (in-memory sliding window).
 
-TurnRecord         — a single conversation turn (role, text, timestamp).
-ConversationState  — ordered history of turns with a configurable max-size window.
+ConversationState  — ordered history of ModelMessage objects with a configurable
+                     max-size window.
 
 History is in-memory only and cleared on each process start.
-The system message is not stored here — it is configuration owned by the orchestrator.
 """
 
 from collections import deque
-from datetime import datetime
+from collections.abc import Sequence
 
-from pydantic import BaseModel
-
-_ALLOWED_ROLES = {"user", "assistant"}
-
-
-class TurnRecord(BaseModel):
-    """A single turn in the conversation."""
-
-    role: str
-    text: str
-    timestamp: datetime
+from pydantic_ai.messages import ModelMessage
 
 
 class ConversationState:
-    """Maintains an ordered, bounded history of conversation turns.
+    """Maintains an ordered, bounded history of conversation messages.
 
     Args:
-        max_turns: Maximum number of turns to retain. Oldest turns are dropped
-                   when this limit is exceeded. Defaults to 40.
+        max_turns: Maximum number of messages to retain. Oldest messages are
+                   dropped when this limit is exceeded. Defaults to 40.
     """
 
     def __init__(self, max_turns: int = 40) -> None:
         self._max_turns = max_turns
-        self._turns: deque[TurnRecord] = deque(maxlen=max_turns)
+        self._messages: deque[ModelMessage] = deque(maxlen=max_turns)
 
-    def append(self, turn: TurnRecord) -> None:
-        """Add a turn to history.
+    def extend(self, messages: Sequence[ModelMessage]) -> None:
+        """Add messages to history."""
+        for msg in messages:
+            self._messages.append(msg)
 
-        Raises:
-            ValueError: If the turn's role is 'system'. The system message is
-                        orchestrator configuration, not conversation history.
-        """
-        if turn.role == "system":
-            raise ValueError(
-                "Cannot store a 'system' role turn in conversation history. "
-                "The system message is orchestrator configuration."
-            )
-        if turn.role not in _ALLOWED_ROLES:
-            raise ValueError(
-                f"Unknown role '{turn.role}'. Allowed roles: {sorted(_ALLOWED_ROLES)}"
-            )
-        self._turns.append(turn)
-
-    def history(self) -> list[TurnRecord]:
+    def history(self) -> list[ModelMessage]:
         """Return a snapshot of the current history in chronological order."""
-        return list(self._turns)
+        return list(self._messages)

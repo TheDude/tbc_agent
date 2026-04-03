@@ -3,25 +3,24 @@ Block 5: Agent Loop / Orchestrator.
 
 Orchestrator coordinates the full chat cycle:
   1. Wait for an input event
-  2. Read conversation history
-  3. Assemble prompt: [system message] + [history] + [current user turn]
-  4. Call the LLM
-  5. Deliver the response (or an error message) via the output channel
-  6. Update conversation state on success
-  7. Repeat until ShutdownSignal
+  2. Call the LLM via pydantic-ai Agent (system prompt resolved by source)
+  3. Deliver the response (or an error message) via the output channel
+  4. Update conversation state on success
+  5. Repeat until ShutdownSignal
 
 ObservabilityClient defines the hooks for optional tracing.
 NoOpObservability is used when observability is disabled (None passed to Orchestrator).
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 
-from tbc_agent.conversation_state import ConversationState, TurnRecord
+from pydantic_ai import Agent
+from pydantic_ai.messages import ModelMessage
+
+from tbc_agent.conversation_state import ConversationState
 from tbc_agent.input_events import EventRecord, InputProducer, ShutdownSignal
-from tbc_agent.llm_interface import LlmError, LlmInterface, LlmResponse, MessageRecord
+from tbc_agent.llm_interface import LlmError, LlmResponse, UsageRecord
 from tbc_agent.output_channels import OutputChannel, ResponseRecord
-from tbc_agent.prompt_registry import PromptRegistry
 
 ERROR_REPLY = "I was unable to get a response, please try again."
 
@@ -33,7 +32,7 @@ class ObservabilityClient(ABC):
     def on_cycle_start(self, event: EventRecord) -> None: ...
 
     @abstractmethod
-    def on_prompt_assembled(self, messages: list[MessageRecord]) -> None: ...
+    def on_llm_call(self, messages: list[ModelMessage]) -> None: ...
 
     @abstractmethod
     def on_llm_response(self, response: LlmResponse | LlmError) -> None: ...
@@ -48,7 +47,7 @@ class NoOpObservability(ObservabilityClient):
     def on_cycle_start(self, event: EventRecord) -> None:
         pass
 
-    def on_prompt_assembled(self, messages: list[MessageRecord]) -> None:
+    def on_llm_call(self, messages: list[ModelMessage]) -> None:
         pass
 
     def on_llm_response(self, response: LlmResponse | LlmError) -> None:
@@ -62,28 +61,25 @@ class Orchestrator:
     """Coordinates the chat agent cycle.
 
     Args:
-        producer:        Source of input events.
-        llm:             LLM implementation to call.
-        channel:         Output channel to deliver responses through.
-        state:           Conversation history store.
-        prompt_registry: Resolves the system prompt for each event source.
-        observability:   Optional observability client. Pass None to disable tracing.
+        producer:      Source of input events.
+        agent:         pydantic-ai Agent configured with a dynamic system prompt.
+        channel:       Output channel to deliver responses through.
+        state:         Conversation history store.
+        observability: Optional observability client. Pass None to disable tracing.
     """
 
     def __init__(
         self,
         producer: InputProducer,
-        llm: LlmInterface,
+        agent: Agent[str, str],
         channel: OutputChannel,
         state: ConversationState,
-        prompt_registry: PromptRegistry,
         observability: ObservabilityClient | None = None,
     ) -> None:
         self._producer = producer
-        self._llm = llm
+        self._agent = agent
         self._channel = channel
         self._state = state
-        self._registry = prompt_registry
         self._obs = observability if observability is not None else NoOpObservability()
 
     def run(self) -> None:
@@ -96,32 +92,48 @@ class Orchestrator:
 
             self._obs.on_cycle_start(event)
 
-            messages = self._assemble_prompt(event)
-            self._obs.on_prompt_assembled(messages)
+            result = self._call_llm(event.payload, event.source)
 
-            response = self._llm.call(messages)
-            self._obs.on_llm_response(response)
-
-            if isinstance(response, LlmError):
+            if isinstance(result, LlmError):
+                self._obs.on_llm_response(result)
                 self._channel.deliver(ResponseRecord(reply_text=ERROR_REPLY))
                 self._obs.on_cycle_end()
                 continue
 
-            self._channel.deliver(ResponseRecord(reply_text=response.reply_text))
+            response, new_messages = result
+            self._obs.on_llm_call(new_messages)
+            self._obs.on_llm_response(response)
 
-            now = datetime.now(tz=timezone.utc)
-            self._state.append(TurnRecord(role="user", text=event.payload, timestamp=now))
-            self._state.append(TurnRecord(role="assistant", text=response.reply_text, timestamp=now))
+            self._channel.deliver(ResponseRecord(reply_text=response.reply_text))
+            self._state.extend(new_messages)
 
             self._obs.on_cycle_end()
 
-    def _assemble_prompt(self, event: EventRecord) -> list[MessageRecord]:
-        """Build the message list: system message + history + current user turn."""
-        system_prompt = self._registry.get_system_prompt(event.source)
-        messages: list[MessageRecord] = [
-            MessageRecord(role="system", text=system_prompt)
-        ]
-        for turn in self._state.history():
-            messages.append(MessageRecord(role=turn.role, text=turn.text))
-        messages.append(MessageRecord(role="user", text=event.payload))
-        return messages
+    def _call_llm(
+        self, user_prompt: str, source: str
+    ) -> tuple[LlmResponse, list[ModelMessage]] | LlmError:
+        """Call the pydantic-ai Agent and translate the result.
+
+        Returns a (LlmResponse, new_messages) tuple on success, or LlmError on
+        any failure. Never raises.
+        """
+        try:
+            result = self._agent.run_sync(
+                user_prompt,
+                deps=source,
+                message_history=self._state.history(),
+            )
+            usage = result.usage()
+            response = LlmResponse(
+                reply_text=result.output,
+                usage=UsageRecord(
+                    prompt_tokens=usage.input_tokens or 0,
+                    completion_tokens=usage.output_tokens or 0,
+                    reasoning_tokens=0,
+                    total_tokens=usage.total_tokens or 0,
+                ),
+                model_id=str(self._agent.model),
+            )
+            return response, result.new_messages()
+        except Exception as exc:
+            return LlmError(reason=str(exc))

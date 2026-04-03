@@ -9,10 +9,35 @@ observability failures never affect the agent's functional behaviour.
 """
 
 from langfuse import Langfuse
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    UserPromptPart,
+)
 
 from tbc_agent.input_events import EventRecord
-from tbc_agent.llm_interface import LlmError, LlmResponse, MessageRecord
+from tbc_agent.llm_interface import LlmError, LlmResponse
 from tbc_agent.orchestrator import ObservabilityClient
+
+
+def _serialize_messages(messages: list[ModelMessage]) -> list[dict]:
+    """Best-effort serialization of ModelMessage list for Langfuse spans."""
+    result = []
+    for msg in messages:
+        if isinstance(msg, ModelRequest):
+            for part in msg.parts:
+                if isinstance(part, SystemPromptPart):
+                    result.append({"role": "system", "content": part.content})
+                elif isinstance(part, UserPromptPart):
+                    result.append({"role": "user", "content": part.content})
+        elif isinstance(msg, ModelResponse):
+            for part in msg.parts:
+                if isinstance(part, TextPart):
+                    result.append({"role": "assistant", "content": part.content})
+    return result
 
 
 class LangfuseObservability(ObservabilityClient):
@@ -32,13 +57,13 @@ class LangfuseObservability(ObservabilityClient):
         except Exception:
             self._trace = None
 
-    def on_prompt_assembled(self, messages: list[MessageRecord]) -> None:
+    def on_llm_call(self, messages: list[ModelMessage]) -> None:
         if self._trace is None:
             return
         try:
             self._llm_span = self._trace.span(
                 name="llm-call",
-                input={"messages": [{"role": m.role, "content": m.text} for m in messages]},
+                input={"messages": _serialize_messages(messages)},
             )
         except Exception:
             self._llm_span = None

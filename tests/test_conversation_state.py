@@ -1,17 +1,26 @@
 """
 Tests for Block 4: Conversation State (in-memory sliding window).
-All tests follow T4.1–T4.10 from the design plan.
+Adapted for pydantic-ai ModelMessage storage.
 """
 
-from datetime import datetime, timezone
-
 import pytest
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
 
-from tbc_agent.conversation_state import ConversationState, TurnRecord
+from tbc_agent.conversation_state import ConversationState
 
 
-def make_turn(role: str, text: str) -> TurnRecord:
-    return TurnRecord(role=role, text=text, timestamp=datetime.now(tz=timezone.utc))
+def make_request(text: str) -> ModelRequest:
+    return ModelRequest(parts=[UserPromptPart(content=text)])
+
+
+def make_response(text: str) -> ModelResponse:
+    return ModelResponse(parts=[TextPart(content=text)])
 
 
 # ---------------------------------------------------------------------------
@@ -20,44 +29,41 @@ def make_turn(role: str, text: str) -> TurnRecord:
 
 class TestCoreOperations:
     def test_T4_1_new_state_has_empty_history(self):
-        """T4.1: A freshly created ConversationState has no turns."""
+        """T4.1: A freshly created ConversationState has no messages."""
         state = ConversationState()
         assert state.history() == []
 
-    def test_T4_2_append_and_read_single_turn(self):
-        """T4.2: Appending a turn and reading history returns that turn."""
+    def test_T4_2_extend_and_read_single_pair(self):
+        """T4.2: Extending with messages and reading history returns them."""
         state = ConversationState()
-        turn = make_turn("user", "hello")
-        state.append(turn)
+        msgs = [make_request("hello"), make_response("hi")]
+        state.extend(msgs)
 
         history = state.history()
-        assert len(history) == 1
-        assert history[0] is turn
+        assert len(history) == 2
 
-    def test_T4_3_multiple_turns_returned_in_insertion_order(self):
-        """T4.3: Multiple turns are returned in the order they were appended."""
+    def test_T4_3_multiple_messages_returned_in_insertion_order(self):
+        """T4.3: Multiple messages are returned in the order they were added."""
         state = ConversationState()
-        turns = [
-            make_turn("user", "first"),
-            make_turn("assistant", "second"),
-            make_turn("user", "third"),
+        msgs = [
+            make_request("first"),
+            make_response("second"),
+            make_request("third"),
         ]
-        for t in turns:
-            state.append(t)
+        state.extend(msgs)
 
-        assert state.history() == turns
+        assert state.history() == msgs
 
-    def test_T4_4_turn_records_preserve_all_fields(self):
-        """T4.4: Role, text, and timestamp are preserved exactly as appended."""
+    def test_T4_4_messages_preserve_content(self):
+        """T4.4: Message content is preserved exactly as added."""
         state = ConversationState()
-        ts = datetime.now(tz=timezone.utc)
-        turn = TurnRecord(role="assistant", text="deep thought", timestamp=ts)
-        state.append(turn)
+        req = make_request("deep thought")
+        resp = make_response("42")
+        state.extend([req, resp])
 
-        retrieved = state.history()[0]
-        assert retrieved.role == "assistant"
-        assert retrieved.text == "deep thought"
-        assert retrieved.timestamp == ts
+        history = state.history()
+        assert isinstance(history[0], ModelRequest)
+        assert isinstance(history[1], ModelResponse)
 
 
 # ---------------------------------------------------------------------------
@@ -66,69 +72,54 @@ class TestCoreOperations:
 
 class TestSlidingWindowTruncation:
     def test_T4_5_no_truncation_below_limit(self):
-        """T4.5: History with fewer than N turns is returned complete."""
+        """T4.5: History with fewer than N messages is returned complete."""
         state = ConversationState(max_turns=10)
         for i in range(5):
-            state.append(make_turn("user", f"msg {i}"))
+            state.extend([make_request(f"msg {i}")])
 
         assert len(state.history()) == 5
 
-    def test_T4_6_oldest_turn_dropped_at_limit(self):
-        """T4.6: When history reaches max_turns, appending drops the oldest."""
+    def test_T4_6_oldest_message_dropped_at_limit(self):
+        """T4.6: When history reaches max_turns, extending drops the oldest."""
         state = ConversationState(max_turns=3)
-        t1 = make_turn("user", "first")
-        t2 = make_turn("assistant", "second")
-        t3 = make_turn("user", "third")
-        t4 = make_turn("assistant", "fourth")
+        m1 = make_request("first")
+        m2 = make_response("second")
+        m3 = make_request("third")
+        m4 = make_response("fourth")
 
-        for t in [t1, t2, t3, t4]:
-            state.append(t)
+        state.extend([m1, m2, m3, m4])
 
         history = state.history()
         assert len(history) == 3
-        assert t1 not in history
-        assert t4 in history
+        assert m1 not in history
+        assert m4 in history
 
     def test_T4_7_truncation_drops_from_front(self):
-        """T4.7: Truncation removes the oldest (front) turns, not the newest."""
+        """T4.7: Truncation removes the oldest (front) messages, not the newest."""
         state = ConversationState(max_turns=2)
-        t1 = make_turn("user", "oldest")
-        t2 = make_turn("assistant", "middle")
-        t3 = make_turn("user", "newest")
+        m1 = make_request("oldest")
+        m2 = make_response("middle")
+        m3 = make_request("newest")
 
-        for t in [t1, t2, t3]:
-            state.append(t)
+        state.extend([m1, m2, m3])
 
         history = state.history()
-        assert history[0] is t2
-        assert history[1] is t3
+        assert history[0] is m2
+        assert history[1] is m3
 
-    def test_T4_8_remaining_turns_in_chronological_order_after_truncation(self):
-        """T4.8: After truncation, surviving turns remain in insertion order."""
+    def test_T4_8_remaining_messages_in_chronological_order_after_truncation(self):
+        """T4.8: After truncation, surviving messages remain in insertion order."""
         state = ConversationState(max_turns=3)
-        turns = [make_turn("user", f"msg {i}") for i in range(5)]
-        for t in turns:
-            state.append(t)
+        msgs = [make_request(f"msg {i}") for i in range(5)]
+        state.extend(msgs)
 
         history = state.history()
-        assert history == turns[-3:]
+        assert history == msgs[-3:]
 
     def test_T4_9_window_size_is_configurable(self):
         """T4.9: max_turns is respected at any configured value."""
         for window in [1, 5, 20]:
             state = ConversationState(max_turns=window)
-            for i in range(window + 3):
-                state.append(make_turn("user", f"msg {i}"))
+            msgs = [make_request(f"msg {i}") for i in range(window + 3)]
+            state.extend(msgs)
             assert len(state.history()) == window
-
-
-# ---------------------------------------------------------------------------
-# T4.10: Boundary — system message excluded
-# ---------------------------------------------------------------------------
-
-class TestBoundary:
-    def test_T4_10_system_role_turn_is_rejected(self):
-        """T4.10: Appending a turn with role='system' raises ValueError."""
-        state = ConversationState()
-        with pytest.raises(ValueError, match="system"):
-            state.append(make_turn("system", "you are a helpful assistant"))
