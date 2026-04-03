@@ -28,6 +28,7 @@ from tbc_agent.observability import LangfuseObservability
 from tbc_agent.orchestrator import NoOpObservability, ObservabilityClient, Orchestrator
 from tbc_agent.output_channels import CliChannel, OutputChannel
 from tbc_agent.prompt_registry import DEFAULT_PROMPTS, DEFAULT_SYSTEM_PROMPT, PromptRegistry
+from tbc_agent.tool_loader import discover_tools
 
 DEFAULT_MAX_TURNS = 40
 
@@ -101,7 +102,8 @@ def create_agent(
         prompts=DEFAULT_PROMPTS,
         default=config.default_system_prompt,
     )
-    agent = create_llm_agent(config.model, registry)
+    tools = discover_tools()
+    agent = create_llm_agent(config.model, registry, tools=tools)
 
     return Orchestrator(
         producer=producer,

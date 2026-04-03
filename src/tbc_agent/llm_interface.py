@@ -7,8 +7,10 @@ LlmError       — returned when the call fails (never raises).
 create_llm_agent — builds a pydantic-ai Agent wired to a PromptRegistry.
 """
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel, computed_field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models import Model
 
 from tbc_agent.prompt_registry import PromptRegistry
@@ -52,7 +54,11 @@ class LlmError:
         return f"LlmError(reason={self.reason!r})"
 
 
-def create_llm_agent(model: str | Model, registry: PromptRegistry) -> Agent[str, str]:
+def create_llm_agent(
+    model: str | Model,
+    registry: PromptRegistry,
+    tools: Sequence[Tool] = (),
+) -> Agent[str, str]:
     """Build a pydantic-ai Agent with a dynamic system prompt driven by the registry.
 
     The Agent's deps type is ``str`` (the event source). At call time, pass
@@ -63,8 +69,11 @@ def create_llm_agent(model: str | Model, registry: PromptRegistry) -> Agent[str,
         model:    pydantic-ai model string (e.g. ``"xai:grok-4-1-fast-reasoning"``)
                   or a Model instance (e.g. ``FunctionModel`` for testing).
         registry: Prompt registry mapping event sources to system prompts.
+        tools:    Tool instances to register on the agent. Defaults to empty.
     """
-    agent: Agent[str, str] = Agent(model, deps_type=str, output_type=str, defer_model_check=True)
+    agent: Agent[str, str] = Agent(
+        model, deps_type=str, output_type=str, defer_model_check=True, tools=tools
+    )
 
     @agent.system_prompt
     def _resolve_system_prompt(ctx: RunContext[str]) -> str:

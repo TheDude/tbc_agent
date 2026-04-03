@@ -73,3 +73,18 @@ class TestLangfuseUnreachable:
             agent = create_agent(config)
 
         assert isinstance(agent, Orchestrator)
+
+
+# ---------------------------------------------------------------------------
+# T6.5: Tool loading is called during wiring
+# ---------------------------------------------------------------------------
+
+class TestToolLoading:
+    def test_T6_5_create_agent_calls_discover_tools(self):
+        """T6.5: create_agent invokes discover_tools to load the tool registry."""
+        config = Config()
+
+        with patch("tbc_agent.main.discover_tools", return_value=[]) as mock_discover:
+            create_agent(config)
+
+        mock_discover.assert_called_once()

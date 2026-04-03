@@ -100,3 +100,27 @@ class TestCreateLlmAgent:
         assert isinstance(req, ModelRequest)
         system_parts = [p for p in req.parts if isinstance(p, SystemPromptPart)]
         assert any(p.content == "Webhook prompt" for p in system_parts)
+
+    def test_tools_registered_on_agent(self):
+        """Tools passed to create_llm_agent are available to the agent."""
+        from pydantic_ai import Tool
+
+        tool_calls: list[str] = []
+
+        def my_test_tool() -> str:
+            """A test tool."""
+            tool_calls.append("called")
+            return "tool_result"
+
+        tool_info: list[AgentInfo] = []
+
+        def model_func(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+            tool_info.append(info)
+            return ModelResponse(parts=[TextPart(content="done")])
+
+        registry = PromptRegistry(default="test")
+        model = FunctionModel(model_func)
+        agent = create_llm_agent(model, registry, tools=[Tool(my_test_tool)])
+        agent.run_sync("hello", deps="cli")
+
+        assert any(t.name == "my_test_tool" for t in tool_info[0].function_tools)
