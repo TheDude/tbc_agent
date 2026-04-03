@@ -27,11 +27,8 @@ from tbc_agent.llm_interface import GrokInterface, LlmInterface
 from tbc_agent.observability import LangfuseObservability
 from tbc_agent.orchestrator import NoOpObservability, ObservabilityClient, Orchestrator
 from tbc_agent.output_channels import CliChannel, OutputChannel
+from tbc_agent.prompt_registry import DEFAULT_PROMPTS, DEFAULT_SYSTEM_PROMPT, PromptRegistry
 
-DEFAULT_SYSTEM_MESSAGE = (
-    "You are a helpful, concise assistant. "
-    "Answer clearly and directly."
-)
 DEFAULT_MAX_TURNS = 40
 
 
@@ -44,7 +41,7 @@ class Config:
     langfuse_secret_key: str | None = None
     langfuse_public_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
-    system_message: str = DEFAULT_SYSTEM_MESSAGE
+    default_system_prompt: str = DEFAULT_SYSTEM_PROMPT
     max_turns: int = DEFAULT_MAX_TURNS
 
     @classmethod
@@ -69,7 +66,7 @@ class Config:
             langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
             langfuse_public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
             langfuse_host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-            system_message=os.environ.get("SYSTEM_MESSAGE", DEFAULT_SYSTEM_MESSAGE),
+            default_system_prompt=os.environ.get("SYSTEM_MESSAGE", DEFAULT_SYSTEM_PROMPT),
             max_turns=int(os.environ.get("MAX_TURNS", str(DEFAULT_MAX_TURNS))),
         )
 
@@ -113,13 +110,17 @@ def create_agent(
     channel = channel_override or CliChannel()
     state = ConversationState(max_turns=config.max_turns)
     observability = _create_observability(config)
+    registry = PromptRegistry(
+        prompts=DEFAULT_PROMPTS,
+        default=config.default_system_prompt,
+    )
 
     return Orchestrator(
         producer=producer,
         llm=llm,
         channel=channel,
         state=state,
-        system_message=config.system_message,
+        prompt_registry=registry,
         observability=observability,
     )
 

@@ -21,6 +21,7 @@ from tbc_agent.conversation_state import ConversationState, TurnRecord
 from tbc_agent.input_events import EventRecord, InputProducer, ShutdownSignal
 from tbc_agent.llm_interface import LlmError, LlmInterface, LlmResponse, MessageRecord
 from tbc_agent.output_channels import OutputChannel, ResponseRecord
+from tbc_agent.prompt_registry import PromptRegistry
 
 ERROR_REPLY = "I was unable to get a response, please try again."
 
@@ -61,12 +62,12 @@ class Orchestrator:
     """Coordinates the chat agent cycle.
 
     Args:
-        producer:       Source of input events.
-        llm:            LLM implementation to call.
-        channel:        Output channel to deliver responses through.
-        state:          Conversation history store.
-        system_message: The system prompt sent at the start of every LLM call.
-        observability:  Optional observability client. Pass None to disable tracing.
+        producer:        Source of input events.
+        llm:             LLM implementation to call.
+        channel:         Output channel to deliver responses through.
+        state:           Conversation history store.
+        prompt_registry: Resolves the system prompt for each event source.
+        observability:   Optional observability client. Pass None to disable tracing.
     """
 
     def __init__(
@@ -75,14 +76,14 @@ class Orchestrator:
         llm: LlmInterface,
         channel: OutputChannel,
         state: ConversationState,
-        system_message: str,
+        prompt_registry: PromptRegistry,
         observability: ObservabilityClient | None = None,
     ) -> None:
         self._producer = producer
         self._llm = llm
         self._channel = channel
         self._state = state
-        self._system_message = system_message
+        self._registry = prompt_registry
         self._obs = observability if observability is not None else NoOpObservability()
 
     def run(self) -> None:
@@ -95,7 +96,7 @@ class Orchestrator:
 
             self._obs.on_cycle_start(event)
 
-            messages = self._assemble_prompt(event.payload)
+            messages = self._assemble_prompt(event)
             self._obs.on_prompt_assembled(messages)
 
             response = self._llm.call(messages)
@@ -114,12 +115,13 @@ class Orchestrator:
 
             self._obs.on_cycle_end()
 
-    def _assemble_prompt(self, user_text: str) -> list[MessageRecord]:
+    def _assemble_prompt(self, event: EventRecord) -> list[MessageRecord]:
         """Build the message list: system message + history + current user turn."""
+        system_prompt = self._registry.get_system_prompt(event.source)
         messages: list[MessageRecord] = [
-            MessageRecord(role="system", text=self._system_message)
+            MessageRecord(role="system", text=system_prompt)
         ]
         for turn in self._state.history():
             messages.append(MessageRecord(role=turn.role, text=turn.text))
-        messages.append(MessageRecord(role="user", text=user_text))
+        messages.append(MessageRecord(role="user", text=event.payload))
         return messages

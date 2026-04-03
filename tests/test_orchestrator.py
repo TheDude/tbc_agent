@@ -16,6 +16,7 @@ from tbc_agent.input_events import EventRecord, InputProducer, ShutdownSignal
 from tbc_agent.llm_interface import LlmError, LlmInterface, LlmResponse, MessageRecord, UsageRecord
 from tbc_agent.orchestrator import Orchestrator
 from tbc_agent.output_channels import DeliveryOutcome, OutputChannel, ResponseRecord
+from tbc_agent.prompt_registry import PromptRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -90,13 +91,13 @@ def make_response(text: str = "Assistant reply") -> LlmResponse:
 SYSTEM_MSG = "You are a helpful assistant."
 
 
-def make_orchestrator(producer, llm, channel, state=None, observability=None):
+def make_orchestrator(producer, llm, channel, state=None, observability=None, registry=None):
     return Orchestrator(
         producer=producer,
         llm=llm,
         channel=channel,
         state=state or ConversationState(),
-        system_message=SYSTEM_MSG,
+        prompt_registry=registry or PromptRegistry(default=SYSTEM_MSG),
         observability=observability,
     )
 
@@ -371,3 +372,73 @@ class TestObservabilityToggle:
 
         assert delivered_with[0].reply_text == delivered_without[0].reply_text
         assert len(history_with) == len(history_without)
+
+
+# ---------------------------------------------------------------------------
+# Prompt Registry
+# ---------------------------------------------------------------------------
+
+class TestPromptRegistry:
+    def test_returns_source_specific_prompt(self):
+        """Registry returns the prompt mapped to the given source."""
+        registry = PromptRegistry(prompts={"cli": "CLI prompt"}, default="fallback")
+        assert registry.get_system_prompt("cli") == "CLI prompt"
+
+    def test_falls_back_to_default_for_unknown_source(self):
+        """Registry returns the default prompt when the source has no entry."""
+        registry = PromptRegistry(prompts={"cli": "CLI prompt"}, default="fallback")
+        assert registry.get_system_prompt("webhook") == "fallback"
+
+    def test_default_used_when_no_prompts_provided(self):
+        """Registry with no source mappings always returns the default."""
+        registry = PromptRegistry(default="only this")
+        assert registry.get_system_prompt("anything") == "only this"
+
+
+class TestSourceAwarePromptAssembly:
+    def test_prompt_uses_source_specific_system_message(self):
+        """The orchestrator selects the system prompt based on event source."""
+        registry = PromptRegistry(
+            prompts={"cli": "CLI system prompt", "webhook": "Webhook system prompt"},
+            default="default prompt",
+        )
+        llm = CapturingLlm([make_response()])
+
+        event = EventRecord(
+            event_id=1,
+            source="webhook",
+            timestamp=datetime.now(tz=timezone.utc),
+            payload="hello from webhook",
+        )
+        orch = make_orchestrator(
+            producer=FakeProducer([event, ShutdownSignal()]),
+            llm=llm,
+            channel=CapturingChannel(),
+            registry=registry,
+        )
+        orch.run()
+
+        system_msg = llm.calls[0][0]
+        assert system_msg.role == "system"
+        assert system_msg.text == "Webhook system prompt"
+
+    def test_unknown_source_uses_default_prompt(self):
+        """Events from an unmapped source get the default system prompt."""
+        registry = PromptRegistry(prompts={"cli": "CLI prompt"}, default="fallback prompt")
+        llm = CapturingLlm([make_response()])
+
+        event = EventRecord(
+            event_id=1,
+            source="unknown_source",
+            timestamp=datetime.now(tz=timezone.utc),
+            payload="hello",
+        )
+        orch = make_orchestrator(
+            producer=FakeProducer([event, ShutdownSignal()]),
+            llm=llm,
+            channel=CapturingChannel(),
+            registry=registry,
+        )
+        orch.run()
+
+        assert llm.calls[0][0].text == "fallback prompt"
