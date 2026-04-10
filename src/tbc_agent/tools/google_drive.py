@@ -53,142 +53,21 @@ def _reset_drive_service():
     _drive_service = None
 
 
-def search_drive_files(query: str, folder_id: str = "") -> str:
-    """Search for files in Google Drive by name, or list files in a specific folder."""
-    try:
-        service = _get_drive_service()
-    except RuntimeError as exc:
-        return str(exc)
+def gd_search(query: str) -> Tuple[str, str]:
+    """returns a list of filenames and fileIDs matching the query"""
+    pass
 
-    parts = ["trashed = false"]
-    if query:
-        safe_query = query.replace("'", "\\'")
-        parts.append(f"name contains '{safe_query}'")
-    if folder_id:
-        safe_folder = folder_id.replace("'", "\\'")
-        parts.append(f"'{safe_folder}' in parents")
+def gd_read_metadata(file_id: str) -> str:
+    """returns the file metadata for a given file"""
+    pass
 
-    q = " and ".join(parts)
-
-    try:
-        response = (
-            service.files()
-            .list(
-                q=q,
-                fields="files(id, name, mimeType, modifiedTime)",
-                pageSize=20,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            )
-            .execute()
-        )
-    except HttpError as exc:
-        return f"Google Drive API error: {exc}"
-
-    files = response.get("files", [])
-    if not files:
-        return "No files found matching the query."
-    return json.dumps(files, indent=2)
-
-
-def get_drive_file_metadata(file_id: str) -> str:
-    """Get metadata for a Google Drive file including name, MIME type, size, and modified date."""
-    try:
-        service = _get_drive_service()
-    except RuntimeError as exc:
-        return str(exc)
-
-    try:
-        metadata = (
-            service.files()
-            .get(
-                fileId=file_id,
-                fields="id, name, mimeType, modifiedTime, size, createdTime, owners, webViewLink",
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-    except HttpError as exc:
-        if exc.resp.status == 404:
-            return f"File not found: {file_id}"
-        return f"Google Drive API error: {exc}"
-
-    return json.dumps(metadata, indent=2)
-
-
-def download_drive_file_content(file_id: str) -> str:
-    """Download the text content of a Google Drive file. Google Docs are exported as plain text, Sheets as CSV."""
-    try:
-        service = _get_drive_service()
-    except RuntimeError as exc:
-        return str(exc)
-
-    try:
-        metadata = (
-            service.files()
-            .get(
-                fileId=file_id,
-                fields="id, name, mimeType, size",
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-    except HttpError as exc:
-        if exc.resp.status == 404:
-            return f"File not found: {file_id}"
-        return f"Google Drive API error: {exc}"
-
-    mime_type = metadata.get("mimeType", "")
-    name = metadata.get("name", file_id)
-
-    # Google Workspace files must be exported
-    if mime_type in _EXPORT_MIME_MAP:
-        export_mime = _EXPORT_MIME_MAP[mime_type]
-        try:
-            data = (
-                service.files()
-                .export(fileId=file_id, mimeType=export_mime)
-                .execute()
-            )
-        except HttpError as exc:
-            return f"Google Drive API error: {exc}"
-        content = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
-        if len(content) > _MAX_CONTENT_CHARS:
-            content = content[:_MAX_CONTENT_CHARS] + f"\n\n[Truncated: content exceeded {_MAX_CONTENT_CHARS} characters]"
-        return content
-
-    # Binary files — refuse rather than dump raw bytes
-    is_text = (
-        mime_type.startswith("text/")
-        or mime_type in ("application/json", "application/xml", "application/javascript")
-    )
-    if not is_text:
-        return (
-            f"Cannot display binary file '{name}' ({mime_type}). "
-            "Use get_drive_file_metadata to inspect it."
-        )
-
-    # Size guard for regular files
-    size = int(metadata.get("size") or 0)
-    if size > _MAX_FILE_SIZE_BYTES:
-        return (
-            f"File '{name}' is {size} bytes, which exceeds the {_MAX_FILE_SIZE_BYTES}-byte limit. "
-            "Consider accessing a specific section instead."
-        )
-
-    try:
-        data = service.files().get_media(fileId=file_id).execute()
-    except HttpError as exc:
-        return f"Google Drive API error: {exc}"
-
-    content = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
-    if len(content) > _MAX_CONTENT_CHARS:
-        content = content[:_MAX_CONTENT_CHARS] + f"\n\n[Truncated: content exceeded {_MAX_CONTENT_CHARS} characters]"
-    return content
+def gd_get_file(file_id: str) -> str:
+    """downloads a file to a temporary location local reading/writing/editing"""
+    pass
 
 
 tools = [
-    Tool(search_drive_files),
-    Tool(get_drive_file_metadata),
-    Tool(download_drive_file_content),
+    Tool(gd_search),
+    Tool(gd_read_metadata),
+    Tool(gd_get_file),
 ]
