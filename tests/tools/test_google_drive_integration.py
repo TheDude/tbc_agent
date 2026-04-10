@@ -1,5 +1,5 @@
 """
-Integration tests for google_drive tool.
+tests for google_drive tool Integration.
 
 These tests make real Google Drive API calls against a fixed test folder structure.
 Run with: bws run -- uv run pytest -m integration
@@ -25,15 +25,6 @@ from tbc_agent.tools.google_drive import (
 
 pytestmark = [pytest.mark.integration, pytest.mark.google_drive]
 
-
-@pytest.fixture(scope="module", autouse=True)
-def require_credentials():
-    """Skip tests if credentials not configured."""
-    key_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
-    if not key_file:
-        pytest.skip("GOOGLE_SERVICE_ACCOUNT_KEY_FILE not set")
-
-
 TEST_DOC_NAME = "Copy of Dawn"
 TEST_SHEET_NAME = "Copy of Finnegan Upgrades"
 TEST_JUNK_FOLDER_NAME = "junk_folder"
@@ -48,7 +39,7 @@ def doc_file_id():
     data = json.loads(result)
     files = data.get("files", [])
     if not files:
-        pytest.skip(f"Test document '{TEST_DOC_NAME}' not found")
+        pytest.fail(f"Test document '{TEST_DOC_NAME}' not found")
     return files[0]["id"]
 
 
@@ -59,7 +50,7 @@ def sheet_file_id():
     data = json.loads(result)
     files = data.get("files", [])
     if not files:
-        pytest.skip(f"Test sheet '{TEST_SHEET_NAME}' not found")
+        pytest.fail(f"Test sheet '{TEST_SHEET_NAME}' not found")
     return files[0]["id"]
 
 
@@ -70,7 +61,7 @@ def text_file_id():
     data = json.loads(result)
     files = data.get("files", [])
     if not files:
-        pytest.skip(f"Test text file '{TEST_TEXT_FILE_NAME}' not found")
+        pytest.fail(f"Test text file '{TEST_TEXT_FILE_NAME}' not found")
     return files[0]["id"]
 
 
@@ -81,7 +72,7 @@ def pdf_file_id():
     data = json.loads(result)
     files = data.get("files", [])
     if not files:
-        pytest.skip(f"Test PDF '{TEST_PDF_NAME}' not found")
+        pytest.fail(f"Test PDF '{TEST_PDF_NAME}' not found")
     return files[0]["id"]
 
 
