@@ -41,8 +41,8 @@ def _get_drive_service():
             "Provide the path to a service account JSON key file."
         )
 
-    credentials = service_account.Credentials.from_service_account_file(
-        key_file, scopes=_SCOPES
+    credentials = service_account.Credentials.from_service_account_info(
+        json.loads(key_file), scopes=_SCOPES
     )
     _drive_service = build("drive", "v3", credentials=credentials)
     return _drive_service

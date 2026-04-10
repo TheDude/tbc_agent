@@ -18,6 +18,8 @@ from tbc_agent.tools.google_drive import (
     _reset_drive_service,
 )
 
+pytestmark = [pytest.mark.google_drive]
+
 
 def _make_http_error(status: int, reason: str = "") -> HttpError:
     resp = MagicMock()
