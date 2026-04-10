@@ -35,7 +35,7 @@ This is a CLI chat agent built on Python 3.12+ using pydantic-ai as the orchestr
 
 See `README.md` for detailed architecture and `tbc_agent_design_context.md` for design rationale.
 
-## Security and Safety
+## Development Security and Safety
 - Environment variables contain the user's private secrets. Respecting this privacy is *critical* to maintaining safety and security.
 - **ALWAYS** respect the user's privacy.
 - **NEVER** read any .env files 
