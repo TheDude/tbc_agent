@@ -9,10 +9,12 @@ Tools follow a simple contract:
 - Each tool function returns a `str` (the tool's response)
 
 ## Development Security and Safety
-- Environment variables contain the user's private secrets. Respecting this privacy is *critical* to maintaining safety and security.
-- **ALWAYS** respect the user's privacy.
-- **NEVER** read any .env files 
-- **NEVER** examine any environment variables.
+
+These rules protect the developer's secrets from leaking into an agent's context. They govern how you, *the agent* behaves, not how the code operates.
+
+- **NEVER read any .env files or environment variables.** Secrets are injected at runtime by `bws`. An agent must never inspect them.
+- **ALWAYS respect the developer's privacy.** Never examine, log, or echo secrets that may appear in your context.
+- **Only use `bws run` to execute commands.** The `bws` tool injects credentials; do not invoke it with other subcommands.
 
 ## Tool File Structure
 
@@ -61,8 +63,6 @@ Tests live in `tests/tools/test_<tool_name>.py`.
 - **Type hints required** on all function signatures
 - **Return errors as strings**, not exceptions (caller handles gracefully)
 - **Keep tools independent** — a tool should not import from other project modules
-
-## Environment Variables in Tools
 
 ## Examples
 

@@ -36,10 +36,12 @@ This is a CLI chat agent built on Python 3.12+ using pydantic-ai as the orchestr
 See `README.md` for detailed architecture and `tbc_agent_design_context.md` for design rationale.
 
 ## Development Security and Safety
-- Environment variables contain the user's private secrets. Respecting this privacy is *critical* to maintaining safety and security.
-- **ALWAYS** respect the user's privacy.
-- **NEVER** read any .env files 
-- **NEVER** examine any environment variables.
+
+These rules protect the developer's secrets from leaking into an agent's context. They govern how you, *the agent* behaves, not how the code operates.
+
+- **NEVER read any .env files or environment variables.** Secrets are injected at runtime by `bws`. An agent must never inspect them.
+- **ALWAYS respect the developer's privacy.** Never examine, log, or echo secrets that may appear in your context.
+- **Only use `bws run` to execute commands.** The `bws` tool injects credentials; do not invoke it with other subcommands.
 
 ## Coding Standards & Rules
 - **Always** use type hints on all function signatures and class attributes.
