@@ -1,77 +1,10 @@
-# AGENTS.md
-
-## Project Overview
-This is a CLI chat agent built on Python 3.12+ using pydantic-ai as the orchestration framework. It coordinates functional blocks (input, LLM interface, output, conversation state, orchestrator) wired together via dependency injection. The agent supports tool-augmented responses via a filesystem-based plugin system and optional Langfuse observability tracing.
-
-## Tech Stack & Versions
-- Language: Python 3.12+
-- Package manager: uv
-- LLM framework: pydantic-ai
-- Observability: Langfuse (optional)
-- External APIs: Google Drive API (google-api-python-client)
-- Testing: pytest + pytest-asyncio
-- Build: hatchling
-
-## Key Commands
-- Install dependencies: `uv sync --extra dev`
-- Run the agent: `bws run -- uv run python -m tbc_agent.main`
-- Run tests: `bws run -- uv run pytest`
-- Run tests with verbose output: `bws run -- uv run pytest -v`
-
-## Project Structure
-- `src/tbc_agent/` — Core source code
-  - `main.py` — Entry point, Config, and wiring
-  - `orchestrator.py` — Agent loop / cycle coordinator
-  - `llm_interface.py` — pydantic-ai Agent factory and response types
-  - `input_events.py` — Input abstraction (EventRecord, CliProducer)
-  - `output_channels.py` — Output abstraction (ResponseRecord, CliChannel)
-  - `conversation_state.py` — In-memory sliding-window message history
-  - `prompt_registry.py` — Source-to-system-prompt mapping
-  - `observability.py` — Langfuse tracing implementation
-  - `tool_loader.py` — Filesystem-based tool discovery
-  - `tools/` — Tool implementations (current_time, google_drive)
-- `tests/` — Test suite mirroring source structure
-  - `tools/` — Tool-specific tests
-
-See `README.md` for detailed architecture and `tbc_agent_design_context.md` for design rationale.
-
 ## Development Security and Safety
 
-These rules protect the developer's secrets from leaking into an agent's context. They govern how you, *the agent* behaves, not how the code operates.
+These rules protect the developer's secrets from leaking into an AI agent's context when the AI is acting as a developer working on this codebase. They govern how *you*, the AI agent, should behave when modifying or examining this code, not how the compiled software operates.
 
-- **NEVER read any .env files or environment variables.** Secrets are injected at runtime by `bws`. An agent must never inspect them.
-- **ALWAYS respect the developer's privacy.** Never examine, log, or echo secrets that may appear in your context.
-- **Only use `bws run` to execute commands.** The `bws` tool injects credentials; do not invoke it with other subcommands.
+When you are acting as a developer AI (e.g., reading code, making changes, debugging):
+- **NEVER** read any `.env` files or environment variables. Secrets are injected at runtime by `bws` when the software runs; you as the developer AI must never inspect them during development.
+- **ALWAYS** respect the developer's privacy. Never examine, log, or echo secrets that may appear in code comments, configuration files, or documentation.
+- **Only use `bws run` to execute commands** when testing your changes. The `bws` tool injects credentials; do not invoke it with other subcommands or attempt to obtain credentials through other means.
 
-## Coding Standards & Rules
-- **Always** use type hints on all function signatures and class attributes.
-- Keep all blocks independent and testable via dependency injection.
-- Return errors as values (`LlmError`) rather than raising exceptions across block boundaries.
-
-## Testing Expectations
-- All new code must have corresponding tests.
-- Unit tests use test doubles (FakeProducer, FunctionModel, CapturingChannel) to isolate the block under test.
-- Integration tests (`test_integration.py`) use real components with a `FunctionModel` to simulate the LLM.
-- Tool tests mock `_get_drive_service` to avoid real API calls.
-- Run `uv run pytest` before committing changes.
-
-
-## Architecture Notes
-- **Five-block design**: Input (EventRecord) → Orchestrator → LLM (Agent) → Output (ResponseRecord), with State and Observability as supporting blocks.
-- **Error handling**: `LlmError` is returned as a value; the orchestrator delivers an error reply and continues the loop.
-- **Tool discovery**: `tool_loader.discover_tools()` scans `src/tbc_agent/tools/` for `.py` files (excluding `__init__.py` and `_`-prefixed) that expose a `tools` list.
-- **Observability**: Optional Langfuse tracing via `LangfuseObservability`. Pass `None` to the Orchestrator to disable.
-- **Conversation history**: Bounded to `max_turns` messages (not turns), stored in-memory only.
-
-## Environment Variables
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `XAI_API_KEY` | Yes | xAI API key |
-| `MODEL` | No | pydantic-ai model string (default: `xai:grok-4-1-fast-reasoning`) |
-| `SYSTEM_MESSAGE` | No | Override default system prompt |
-| `MAX_TURNS` | No | Conversation history window size (default: 40) |
-| `LANGFUSE_ENABLED` | No | `"true"` to enable tracing |
-| `LANGFUSE_SECRET_KEY` | No | Langfuse secret key |
-| `LANGFUSE_PUBLIC_KEY` | No | Langfuse public key |
-| `LANGFUSE_HOST` | No | Langfuse host URL |
-| `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` | No (tools) | Service account JSON for Drive tools |
+These rules do NOT apply to the software itself when it is running as an agent. The software may read environment variables (e.g., for Langfuse configuration or Google Drive credentials) as part of its normal operation when executed via `bws run`. This restriction is solely for AI agents acting in a developer role during code modification and review.
