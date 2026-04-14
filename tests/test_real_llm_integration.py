@@ -45,6 +45,7 @@ class TestRealLlmIntegration:
     """Integration tests with the real xAI Grok model."""
     
     def test_simple_query_real_llm(self):
+        breakpoint()
         """Test that the agent can get a response from the real LLM."""
         agent, stdout = make_agent_with_real_model("Say 'hello' in exactly one word.\nexit\n")
         agent.run()
