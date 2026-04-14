@@ -61,6 +61,7 @@ class TestLangfuseDisabled:
 # ---------------------------------------------------------------------------
 
 class TestLangfuseUnreachable:
+    @pytest.mark.filterwarnings("ignore: Langfuse observability")
     def test_T6_4_langfuse_unreachable_agent_still_starts(self):
         """T6.4: When Langfuse raises on init, create_agent warns and falls back to no-op."""
         config = Config(
