@@ -21,6 +21,9 @@ from dataclasses import dataclass
 
 from langfuse import Langfuse
 
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+
 from tbc_agent.conversation_state import ConversationState
 from tbc_agent.input_events import CliProducer, InputProducer
 from tbc_agent.llm_interface import DEFAULT_MODEL, create_llm_agent
@@ -121,7 +124,7 @@ def main() -> None:
 
     config = Config.from_env()
     config.model = local_model
-    
+
     agent = create_agent(config)
     print("Chat agent ready. Type 'exit' or press Ctrl-D to quit.\n")
     agent.run()

@@ -12,8 +12,6 @@ from collections.abc import Sequence
 from pydantic import BaseModel, computed_field
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
 from tbc_agent.prompt_registry import PromptRegistry
 
