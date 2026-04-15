@@ -119,11 +119,13 @@ def create_agent(
 
 def main() -> None:
     """Entrypoint: load config, build the agent, run the loop."""
-    local_provider = OpenAIProvider(base_url="http://100.122.51.110:11434/v1", api_key="ollama on foundation")
-    local_model = OpenAIChatModel("qwen3.5-4b-12k", provider=local_provider)
 
     config = Config.from_env()
-    config.model = local_model
+
+    #for local model, create a custom OpenAIChatModel
+    #local_provider = OpenAIProvider(base_url="http://100.122.51.110:11434/v1", api_key="ollama on foundation")
+    #local_model = OpenAIChatModel("qwen3.5-4b-12k", provider=local_provider)
+    #config.model = local_model
 
     agent = create_agent(config)
     print("Chat agent ready. Type 'exit' or press Ctrl-D to quit.\n")
