@@ -17,6 +17,13 @@ from googleapiclient.http import MediaIoBaseDownload
 
 from pydantic_ai import Tool
 
+from tbc_agent.auth.google import get_google_drive_credentials
+from tbc_agent.auth.oauth_client import (
+    OauthAuthorizationDeclined,
+    OauthConfigMissing,
+    OauthRefreshFailed,
+)
+
 _SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 _EXPORT_MIME_MAP = {
@@ -28,22 +35,50 @@ _EXPORT_MIME_MAP = {
 _drive_service = None
 
 
+
+
+def _try_oauth_service():
+    try:
+        creds = get_google_drive_credentials()
+        return build("drive", "v3", credentials=creds)
+    except (OauthConfigMissing, OauthAuthorizationDeclined, OauthRefreshFailed) as exc:
+        return str(exc)
+    except Exception as exc:  # pragma: no cover - defensive
+        return str(exc)
+
+
+def _try_service_account():
+    key_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
+    if not key_file:
+        return "GOOGLE_SERVICE_ACCOUNT_KEY_FILE environment variable is not set. Provide the path to a service account JSON key file."
+
+    try:
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(key_file), scopes=_SCOPES
+        )
+        return build("drive", "v3", credentials=credentials)
+    except Exception as exc:  # pragma: no cover - defensive
+        return str(exc)
+
+
 def _get_drive_service():
     global _drive_service
     if _drive_service is not None:
         return _drive_service
 
-    key_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
-    if not key_file:
+    oauth_result = _try_oauth_service()
+    if not isinstance(oauth_result, str):
+        _drive_service = oauth_result
+        return _drive_service
+
+    fallback_result = _try_service_account()
+    if isinstance(fallback_result, str):
         raise RuntimeError(
-            "GOOGLE_SERVICE_ACCOUNT_KEY_FILE environment variable is not set. "
-            "Provide the path to a service account JSON key file."
+            "Failed to establish Google Drive credentials via OAuth2 and service account."
+            f" OAuth2 error: {oauth_result}; Service account error: {fallback_result}"
         )
 
-    credentials = service_account.Credentials.from_service_account_info(
-        json.loads(key_file), scopes=_SCOPES
-    )
-    _drive_service = build("drive", "v3", credentials=credentials)
+    _drive_service = fallback_result
     return _drive_service
 
 

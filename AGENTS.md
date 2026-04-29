@@ -29,6 +29,7 @@ This is a modular chat agent built with **pydantic-ai**. The architecture follow
 - **Optional observability**: Langfuse tracing is toggled via `LANGFUSE_ENABLED`; failures are silently swallowed to avoid affecting agent behavior.
 - **Dynamic system prompts**: `PromptRegistry` resolves source-specific prompts at call time via `RunContext.deps`.
 - **Error handling**: LLM errors return `LlmError` objects instead of raising — caller inspects and handles gracefully.
+- **OAuth-first integrations**: Shared Authlib + keyring OAuth2 helpers live in `src/tbc_agent/auth/`. Tools request credentials via provider-specific helpers (e.g., Google Drive) which store tokens in the OS keyring and fall back to legacy auth when needed.
 
 ### Configuration (Environment Variables)
 

@@ -8,13 +8,11 @@ Tools follow a simple contract:
 - Export a **`tools` list** containing `pydantic_ai.Tool` instances
 - Each tool function returns a `str` (the tool's response)
 
-## Development Security and Safety
+## Authentication & Secrets
 
-These rules protect the developer's secrets from leaking into an agent's context. They govern how you, *the agent* behaves, not how the code operates.
-
-- **NEVER read any .env files or environment variables.** Secrets are injected at runtime by `bws`. An agent must never inspect them.
-- **ALWAYS respect the developer's privacy.** Never examine, log, or echo secrets that may appear in your context.
-- **Only use `bws run` to execute commands.** The `bws` tool injects credentials; do not invoke it with other subcommands.
+- **OAuth2 (default)**: Tools that integrate with Google services must use the shared helpers under `src/tbc_agent/auth/`. Device-flow OAuth2 (Authlib) stores tokens securely in the OS keyring via `keyring`. Required env vars: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`.
+- **Service accounts (fallback)**: When OAuth2 is unavailable, tools may fall back to `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` (JSON content). Keep this out of version control and inject via environment.
+- **Security rules**: Never read `.env` files or arbitrary environment variables directly from code to avoid leaking secrets. Use provided configuration interfaces, and always run commands through `bws run` when testing.
 
 ## Tool File Structure
 
