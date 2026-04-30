@@ -14,7 +14,7 @@ dependencies = [
     "google-api-python-client>=2.0",
     "google-auth>=2.0",
     "authlib>=1.3",
-    "keyring>=24.0",
+    "bitwarden-sdk>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +28,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "integration: Integration tests (slow, require external services)",
-    "google_drive: Tests for google_drive tool",
+    "google_drive: Tests for google Drive integrations",
+    "manual: Tests that require human interaction or real credentials",
 ]
 addopts = "-m \"not integration\""
 

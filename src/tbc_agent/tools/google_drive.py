@@ -39,6 +39,7 @@ _drive_service = None
 
 def _try_oauth_service():
     try:
+        breakpoint()
         creds = get_google_drive_credentials()
         return build("drive", "v3", credentials=creds)
     except (OauthConfigMissing, OauthAuthorizationDeclined, OauthRefreshFailed) as exc:

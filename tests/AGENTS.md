@@ -43,10 +43,18 @@ Running the Suite
 Always invoke pytest through `bws` so environment secrets resolve correctly:
 
 ```
-bws run -- uv run pytest           # full suite (excludes integration by default)
-bws run -- uv run pytest tests/tools/   # tool-only subset
-bws run -- uv run pytest -m integration # opt-in integration/real LLM tests
+bws run -- uv run pytest                     # full suite (excludes integration/manual by default)
+bws run -- uv run pytest tests/tools/        # tool-only subset
+bws run -- uv run pytest -m integration      # opt-in integration/real LLM tests
+bws run -- uv run pytest -m "manual and google_drive" tests/auth/test_oauth_device_flow_manual.py
+                                            # live OAuth device-flow validation (requires human interaction)
 ```
+
+Manual Tests
+------------
+* Marked with `@pytest.mark.manual` and excluded from automated runs.
+* Require valid Google OAuth client credentials (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`) and real user approval.
+* Tokens persist to the OS keyring; revoke afterwards via `python -m keyring delete tbc-agent <entry>` or Google account security settings.
 
 Extending the Tests
 -------------------

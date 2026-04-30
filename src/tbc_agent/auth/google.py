@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from typing import Tuple
 
 from google.auth.transport.requests import Request
@@ -15,9 +17,6 @@ from tbc_agent.auth.oauth_client import (
     OauthRefreshFailed,
 )
 from tbc_agent.auth.oauth_registry import get_provider
-
-GOOGLE_OAUTH_CLIENT_ID_ENV = "GOOGLE_OAUTH_CLIENT_ID"
-GOOGLE_OAUTH_CLIENT_SECRET_ENV = "GOOGLE_OAUTH_CLIENT_SECRET"
 
 _DRIVE_SCOPES: Tuple[str, ...] = ("https://www.googleapis.com/auth/drive.readonly",)
 
@@ -44,8 +43,8 @@ def get_google_drive_credentials(store: CredentialStore | None = None) -> Creden
     client = AuthlibOauthClient(
         provider_id="google",
         scopes=_DRIVE_SCOPES,
-        client_id_env=GOOGLE_OAUTH_CLIENT_ID_ENV,
-        client_secret_env=GOOGLE_OAUTH_CLIENT_SECRET_ENV,
+        client_id_env="GOOGLE_OAUTH_CLIENT_ID",
+        client_secret_env="GOOGLE_OAUTH_CLIENT_SECRET",
         credential_store=store,
     )
 

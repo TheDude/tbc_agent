@@ -54,6 +54,9 @@ bws run -- uv run pytest
 
 # Run tool tests only
 bws run -- uv run pytest tests/tools/
+
+# Run manual OAuth device-flow validation (requires user interaction)
+bws run -- uv run pytest -m "manual and google_drive" tests/auth/test_oauth_device_flow_manual.py
 ```
 
 ---
