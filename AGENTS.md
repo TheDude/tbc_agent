@@ -71,6 +71,12 @@ Key points:
 
 ---
 
+## Testing
+
+Testing conventions, fixtures, and execution commands are documented in **[tests/AGENTS.md](./tests/AGENTS.md)**.
+
+---
+
 ## Development Security and Safety
 
 These rules protect the developer's secrets from leaking into an AI agent's context when the AI is acting as a developer working on this codebase. They govern how *you*, the AI agent, should behave when modifying or examining this code, not how the compiled software operates.
